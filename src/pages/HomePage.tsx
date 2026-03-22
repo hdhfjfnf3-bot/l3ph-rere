@@ -191,17 +191,46 @@ export default function HomePage() {
         </div>
 
         {/* Footer */}
-        <p
+        <div
           className="animate-fade-in"
           style={{
             marginTop: 'var(--space-2xl)',
-            color: 'var(--text-muted)',
-            fontSize: 'var(--font-size-xs)',
             animationDelay: '0.5s',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 'var(--space-sm)'
           }}
         >
-          مدعوم بـ Supabase Realtime • تحقق بالذكاء الاصطناعي
-        </p>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+            fontSize: 'var(--font-size-md)',
+            fontWeight: 700,
+            color: 'var(--text-primary)'
+          }}>
+            <span>صُنع بكل حب لبنتيييي 🥺</span>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style={{ animation: 'bus-pulse 2s infinite' }}>
+              <defs>
+                <linearGradient id="msg-heart" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#FF5A79" />
+                  <stop offset="50%" stopColor="#FF184E" />
+                  <stop offset="100%" stopColor="#D90032" />
+                </linearGradient>
+                <filter id="heart-glow">
+                  <feGaussianBlur stdDeviation="1" result="blur" />
+                  <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                </filter>
+              </defs>
+              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="url(#msg-heart)" filter="url(#heart-glow)"/>
+            </svg>
+          </div>
+          <p className="text-muted text-xs">
+            مدعوم بـ Supabase Realtime • تحقق بالذكاء الاصطناعي
+          </p>
+        </div>
       </div>
     </div>
   );
