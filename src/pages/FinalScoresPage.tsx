@@ -16,7 +16,7 @@ export default function FinalScoresPage() {
   useEffect(() => {
     if (!code) return;
     (async () => {
-      const { data: r } = await supabase.from('rooms').select('*').eq('code', code).single();
+      const { data: r } = await supabase.from('rooms').select('*').eq('code', code).maybeSingle();
       if (r) dispatch({ type: 'SET_ROOM', payload: r });
       if (r?.id) {
         const { data: ps } = await supabase.from('players').select('*').eq('room_id', r.id).order('score', { ascending: false });

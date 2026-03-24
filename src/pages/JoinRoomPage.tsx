@@ -30,7 +30,7 @@ export default function JoinRoomPage() {
         .from('rooms')
         .select('*')
         .eq('code', trimCode)
-        .single();
+        .maybeSingle();
 
       if (roomErr || !room) { setError('الغرفة غير موجودة، تحقق من الكود'); setIsLoading(false); return; }
       if (room.status !== 'waiting') { setError('اللعبة بدأت بالفعل، لا يمكن الانضمام الآن'); setIsLoading(false); return; }
@@ -51,7 +51,7 @@ export default function JoinRoomPage() {
         .select('*')
         .eq('room_id', room.id)
         .eq('session_id', sessionId)
-        .single();
+        .maybeSingle();
 
       let player;
       if (existing) {

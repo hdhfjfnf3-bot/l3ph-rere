@@ -26,7 +26,7 @@ export default function LobbyPage() {
     (async () => {
       // Load room if not yet in context
       if (!state.room) {
-        const { data: room } = await supabase.from('rooms').select('*').eq('code', code).single();
+        const { data: room } = await supabase.from('rooms').select('*').eq('code', code).maybeSingle();
         if (room) dispatch({ type: 'SET_ROOM', payload: room });
       }
 
@@ -103,7 +103,7 @@ export default function LobbyPage() {
           started_at: new Date().toISOString(),
         })
         .select()
-        .single();
+        .maybeSingle();
 
       if (roundErr) throw roundErr;
 

@@ -31,7 +31,7 @@ export default function ResultsPage() {
   useEffect(() => {
     if (!code) return;
     (async () => {
-      const { data: r } = await supabase.from('rooms').select('*').eq('code', code).single();
+      const { data: r } = await supabase.from('rooms').select('*').eq('code', code).maybeSingle();
       if (r) dispatch({ type: 'SET_ROOM', payload: r });
 
       if (r?.id) {
@@ -226,7 +226,7 @@ export default function ResultsPage() {
       round_number: nextRound,
       letter: newLetter,
       started_at: new Date().toISOString(),
-    }).select().single();
+    }).select().maybeSingle();
 
     // Reset players
     await supabase.from('players').update({ status: 'typing' }).eq('room_id', room.id);

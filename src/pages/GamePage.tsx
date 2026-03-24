@@ -124,7 +124,7 @@ export default function GamePage() {
   useEffect(() => {
     if (!code) return;
     (async () => {
-      const { data: r } = await supabase.from('rooms').select('*').eq('code', code).single();
+      const { data: r } = await supabase.from('rooms').select('*').eq('code', code).maybeSingle();
       if (r) {
         dispatch({ type: 'SET_ROOM', payload: r });
         setBusPressed(r.bus_pressed_by);
