@@ -195,6 +195,8 @@ export default function GamePage() {
           setIsLocked(true);
           if (timerRef.current) clearInterval(timerRef.current);
           if (state.soundEnabled) sounds.busHorn();
+
+          // ALL clients submit their own answers on bus press (host submission also triggers transition)
           submitAnswers(updated.bus_pressed_by);
         }
 
@@ -244,7 +246,7 @@ export default function GamePage() {
     }, 1000);
   }, [currentPlayer, round?.letter, code]);
 
-  const submitAnswers = useCallback(async (busBy?: string | null) => {
+  const submitAnswers = useCallback(async (busPresserId?: string | null) => {
     if (isSubmitting) return;
     setIsSubmitting(true);
 
@@ -254,7 +256,7 @@ export default function GamePage() {
 
       const answers = answersRef.current;
 
-      // Insert answers
+      // Insert answers (ignore conflict if already inserted)
       const answerRows = categories.map(cat => ({
         round_id: currentRound.id,
         player_id: currentPlayer.id,
@@ -270,17 +272,15 @@ export default function GamePage() {
       }
 
       // Update player status
-      // Update player status
-      const newStatus = busBy === sessionId ? 'pressed_bus' : 'done';
+      const newStatus = busPresserId === currentPlayer.id ? 'pressed_bus' : 'done';
       await supabase.from('players').update({ status: newStatus }).eq('id', currentPlayer.id);
 
-      // Whoever pressed the bus handles the transition. If time's up (busBy = null), host handles it.
-      const shouldTransition = busBy ? (busBy === sessionId) : (room?.host_id === sessionId);
-
-      if (shouldTransition) {
+      // Only the HOST transitions the room to results.
+      // All OTHER clients just wait for the Realtime "status=results" event to navigate.
+      if (room?.host_id === sessionId) {
         setTimeout(async () => {
           await transitionToResults(currentRound);
-        }, 4000); // 4 seconds delay to guarantee all slow connections finish submitting
+        }, 4000);
       }
     } catch (err) {
       console.error('Error submitting answers:', err);
@@ -313,8 +313,9 @@ export default function GamePage() {
     setBusPressed(currentPlayer.id);
     if (timerRef.current) clearInterval(timerRef.current);
 
-    // Update room with bus presser
+    // Update room with bus presser - this triggers Realtime for all other clients
     await supabase.from('rooms').update({ bus_pressed_by: currentPlayer.id }).eq('id', room.id);
+    // Submit this player's own answers
     await submitAnswers(currentPlayer.id);
   };
 
