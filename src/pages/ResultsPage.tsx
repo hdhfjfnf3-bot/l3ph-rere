@@ -47,23 +47,30 @@ export default function ResultsPage() {
           const { data: ans } = await supabase.from('answers').select('*').eq('round_id', rounds[0].id);
           if (ans) {
             setAnswers(ans);
-            // Auto-start validation if host
-            if (r.host_id === sessionId && ans.some(a => a.status === 'pending')) {
-              runValidation(rounds[0], ans, r.bus_pressed_by);
-            }
+            // Validation will be triggered by useEffect when all expected answers arrive
           }
         }
       }
     })();
-  }, [code]);
+  }, [code, sessionId]);
+
 
   // Realtime: listen for answer updates (validation results)
   useEffect(() => {
     if (!round?.id) return;
     const channel = supabase
       .channel(`results:${round.id}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'answers', filter: `round_id=eq.${round.id}` }, payload => {
-        setAnswers(prev => prev.map(a => a.id === (payload.new as Answer).id ? payload.new as Answer : a));
+      // Listen for both INSERT and UPDATE!
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'answers', filter: `round_id=eq.${round.id}` }, payload => {
+        if (payload.eventType === 'INSERT') {
+          setAnswers(prev => {
+            const newAns = payload.new as Answer;
+            if (prev.find(a => a.id === newAns.id)) return prev;
+            return [...prev, newAns];
+          });
+        } else if (payload.eventType === 'UPDATE') {
+          setAnswers(prev => prev.map(a => a.id === (payload.new as Answer).id ? payload.new as Answer : a));
+        }
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'players', filter: `room_id=eq.${room?.id}` }, payload => {
         setPlayers(prev => prev.map(p => p.id === (payload.new as Player).id ? payload.new as Player : p));
@@ -171,6 +178,28 @@ export default function ResultsPage() {
       setValidationStatus('done');
     }
   }, [validationStatus, room, players, state.soundEnabled]);
+
+  // Trigger validation automatically when all answers arrive or after timeout
+  useEffect(() => {
+    if (!isHost || validationStatus !== 'idle' || answers.length === 0 || !round) return;
+
+    const expectedAnswers = players.length * (room?.settings?.categories?.length || 5);
+    
+    // Auto-start if we have all answers
+    if (answers.length >= expectedAnswers) {
+      if (answers.some(a => a.status === 'pending')) {
+        runValidation(round, answers, room?.bus_pressed_by || null);
+      }
+    } else {
+      // Fallback: wait a few seconds for stragglers, then run anyway
+      const timer = setTimeout(() => {
+        if (validationStatus === 'idle' && answers.some(a => a.status === 'pending')) {
+          runValidation(round, answers, room?.bus_pressed_by || null);
+        }
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [answers, players.length, room?.settings?.categories?.length, isHost, validationStatus, round, room?.bus_pressed_by, runValidation]);
 
   const handleNextRound = async () => {
     if (!room || !isHost) return;

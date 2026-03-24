@@ -264,17 +264,19 @@ export default function GamePage() {
         points: 0,
       }));
 
-      await supabase.from('answers').upsert(answerRows, { onConflict: 'round_id,player_id,category' });
+      const { error } = await supabase.from('answers').insert(answerRows);
+      if (error && error.code !== '23505') {
+        console.error('Error inserting answers:', error);
+      }
 
       // Update player status
       const newStatus = busBy === sessionId ? 'pressed_bus' : 'done';
       await supabase.from('players').update({ status: newStatus }).eq('id', currentPlayer.id);
 
-      // Check if all players are done, then transition to results
       if (room?.host_id === sessionId) {
         setTimeout(async () => {
           await transitionToResults(currentRound);
-        }, 2000);
+        }, 4000); // Increased to 4 seconds to guarantee all slow mobile connections finish submitting answers
       }
     } catch (err) {
       console.error('Error submitting answers:', err);
