@@ -270,13 +270,17 @@ export default function GamePage() {
       }
 
       // Update player status
+      // Update player status
       const newStatus = busBy === sessionId ? 'pressed_bus' : 'done';
       await supabase.from('players').update({ status: newStatus }).eq('id', currentPlayer.id);
 
-      if (room?.host_id === sessionId) {
+      // Whoever pressed the bus handles the transition. If time's up (busBy = null), host handles it.
+      const shouldTransition = busBy ? (busBy === sessionId) : (room?.host_id === sessionId);
+
+      if (shouldTransition) {
         setTimeout(async () => {
           await transitionToResults(currentRound);
-        }, 4000); // Increased to 4 seconds to guarantee all slow mobile connections finish submitting answers
+        }, 4000); // 4 seconds delay to guarantee all slow connections finish submitting
       }
     } catch (err) {
       console.error('Error submitting answers:', err);
