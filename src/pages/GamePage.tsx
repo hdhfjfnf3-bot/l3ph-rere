@@ -183,6 +183,9 @@ export default function GamePage() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [round?.started_at, room?.settings?.timePerRound]);
 
+  // Keep a mutable ref to the latest submitAnswers function to avoid stale closures in Realtime
+  const submitAnswersRef = useRef<((busPresserId?: string | null) => Promise<void>) | null>(null);
+
   // Realtime subscriptions
   useEffect(() => {
     if (!room?.id) return;
@@ -207,8 +210,8 @@ export default function GamePage() {
           if (timerRef.current) clearInterval(timerRef.current);
           if (state.soundEnabled) sounds.busHorn();
 
-          // Submit own answers first
-          submitAnswers(updated.bus_pressed_by);
+          // Submit own answers first (using ref to avoid stale closure)
+          if (submitAnswersRef.current) submitAnswersRef.current(updated.bus_pressed_by);
 
           // ALL clients attempt transition after 5 seconds (idempotent - first wins)
           // Fetch latest round ID fresh from DB then attempt transition
@@ -304,6 +307,11 @@ export default function GamePage() {
       setIsSubmitting(false);
     }
   }, [round, currentPlayer, categories, isSubmitting]);
+
+  // Update the ref whenever submitAnswers changes
+  useEffect(() => {
+    submitAnswersRef.current = submitAnswers;
+  }, [submitAnswers]);
 
   const transitionToResults = useCallback(async (currentRound: Round) => {
     if (!room?.id) return;
