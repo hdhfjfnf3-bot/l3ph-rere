@@ -117,9 +117,14 @@ export async function validateRoundAnswers(
     if (!word) {
       status = 'invalid';
     } else {
-      // Rate limit: 1 request per 1.2 seconds for Gemini free tier
-      if (i > 0) await delay(1200);
-      status = await validateWithGemini(word, answer.category, letter);
+      const preCheck = preValidate(word, letter);
+      if (!preCheck.ok) {
+        status = 'invalid';
+      } else {
+        // Rate limit: 1 request per 1.2 seconds for Gemini free tier
+        if (i > 0) await delay(1200);
+        status = await validateWithGemini(word, answer.category, letter);
+      }
     }
 
     results.push({
