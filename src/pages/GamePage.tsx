@@ -258,7 +258,7 @@ export default function GamePage() {
 
       const answers = answersRef.current;
 
-      // Insert answers (ignore conflict if already inserted)
+      // Insert answers (ignore duplicate if already inserted)
       const answerRows = categories.map(cat => ({
         round_id: currentRound.id,
         player_id: currentPlayer.id,
@@ -277,37 +277,49 @@ export default function GamePage() {
       const newStatus = busPresserId === currentPlayer.id ? 'pressed_bus' : 'done';
       await supabase.from('players').update({ status: newStatus }).eq('id', currentPlayer.id);
 
-      // Only the HOST transitions the room to results.
-      // All OTHER clients just wait for the Realtime "status=results" event to navigate.
-      if (room?.host_id === sessionId) {
-        setTimeout(async () => {
-          await transitionToResults(currentRound);
-        }, 4000);
-      }
     } catch (err) {
       console.error('Error submitting answers:', err);
     } finally {
       setIsSubmitting(false);
     }
-  }, [round, currentPlayer, categories, room, sessionId, isSubmitting]);
+  }, [round, currentPlayer, categories, isSubmitting]);
 
-  const transitionToResults = async (currentRound: Round) => {
-    if (!room) return;
-    // Update round ended_at
+  const transitionToResults = useCallback(async (currentRound: Round) => {
+    if (!room?.id) return;
     await supabase.from('rounds').update({ ended_at: new Date().toISOString() }).eq('id', currentRound.id);
-    // Transition room to results
     await supabase.from('rooms').update({ status: 'results' }).eq('id', room.id);
-  };
+  }, [room?.id]);
+
+  // Polling fallback: after bus pressed, ALL clients poll every 2s as backup for Realtime
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (!busPressed || !room?.id || !code) return;
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      const { data } = await supabase.from('rooms').select('status').eq('id', room.id).maybeSingle();
+      if (data?.status === 'results') {
+        clearInterval(pollRef.current!);
+        pollRef.current = null;
+        navigate(`/results/${code}`);
+      }
+    }, 2000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [busPressed, room?.id, code]);
 
   const handleTimeUp = useCallback(async () => {
     if (timerRef.current) clearInterval(timerRef.current);
     if (isLocked) return;
     setIsLocked(true);
+    if (!round || !room?.id) return;
     await submitAnswers(null);
-  }, [isLocked, submitAnswers]);
+    // Host transitions to results after time up
+    if (room?.host_id === getSessionId()) {
+      setTimeout(() => transitionToResults(round), 3000);
+    }
+  }, [isLocked, submitAnswers, transitionToResults, round, room]);
 
   const handleBusPress = async () => {
-    if (isLocked || busPressedRef.current || !currentPlayer || !room) return;
+    if (isLocked || busPressedRef.current || !currentPlayer || !room || !round) return;
     vibrate([100, 50, 100]);
     if (state.soundEnabled) sounds.busHorn();
 
@@ -316,10 +328,14 @@ export default function GamePage() {
     setBusPressed(currentPlayer.id);
     if (timerRef.current) clearInterval(timerRef.current);
 
-    // Update room with bus presser - this triggers Realtime for all other clients
+    // Update room to notify all clients via Realtime
     await supabase.from('rooms').update({ bus_pressed_by: currentPlayer.id }).eq('id', room.id);
-    // Submit this player's own answers
+
+    // Bus presser always submits AND triggers transition (most reliable)
     await submitAnswers(currentPlayer.id);
+
+    // Wait for all other players to submit, then transition to results
+    setTimeout(() => transitionToResults(round), 4000);
   };
 
   // Determine bus presser name
