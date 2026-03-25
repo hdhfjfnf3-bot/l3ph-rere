@@ -328,14 +328,32 @@ export default function GamePage() {
     setBusPressed(currentPlayer.id);
     if (timerRef.current) clearInterval(timerRef.current);
 
-    // Update room to notify all clients via Realtime
-    await supabase.from('rooms').update({ bus_pressed_by: currentPlayer.id }).eq('id', room.id);
+    // Capture IDs now to avoid stale closures in setTimeout
+    const capturedRoomId = room.id;
+    const capturedRoundId = round.id;
+    const capturedPlayerId = currentPlayer.id;
 
-    // Bus presser always submits AND triggers transition (most reliable)
-    await submitAnswers(currentPlayer.id);
+    // Notify all clients via Realtime
+    await supabase.from('rooms').update({ bus_pressed_by: capturedPlayerId }).eq('id', capturedRoomId);
 
-    // Wait for all other players to submit, then transition to results
-    setTimeout(() => transitionToResults(round), 4000);
+    // Submit answers immediately
+    await submitAnswers(capturedPlayerId);
+
+    // Transition to results after delay - using captured IDs (NO closures)
+    setTimeout(async () => {
+      console.log('[Bus] Transitioning to results...', capturedRoomId, capturedRoundId);
+      try {
+        await supabase.from('rounds').update({ ended_at: new Date().toISOString() }).eq('id', capturedRoundId);
+        const { error } = await supabase.from('rooms').update({ status: 'results' }).eq('id', capturedRoomId);
+        if (error) {
+          console.error('[Bus] Failed to set status=results:', error);
+        } else {
+          console.log('[Bus] status=results set successfully!');
+        }
+      } catch (e) {
+        console.error('[Bus] transitionToResults threw:', e);
+      }
+    }, 4000);
   };
 
   // Determine bus presser name
