@@ -108,7 +108,6 @@ export default function GamePage() {
   const lastTickRef = useRef<number>(-1);
   const busPressedRef = useRef<string | null>(null); // Use ref to avoid Realtime subscription restart
 
-  const sessionId = getSessionId();
   const currentPlayer = state.currentPlayer;
   const room = state.room;
   const categories = room?.settings?.categories || [];
@@ -180,13 +179,15 @@ export default function GamePage() {
   useEffect(() => {
     if (!room?.id) return;
 
+    const roomId = room.id; // capture to avoid stale closure
+
     const channel = supabase
-      .channel(`game:${room.id}`)
+      .channel(`game:${roomId}`)
       .on('postgres_changes', {
         event: 'UPDATE',
         schema: 'public',
         table: 'rooms',
-        filter: `id=eq.${room.id}`,
+        filter: `id=eq.${roomId}`,
       }, payload => {
         const updated = payload.new as any;
         dispatch({ type: 'SET_ROOM', payload: updated });
@@ -198,8 +199,20 @@ export default function GamePage() {
           if (timerRef.current) clearInterval(timerRef.current);
           if (state.soundEnabled) sounds.busHorn();
 
-          // ALL clients submit their own answers on bus press (host submission also triggers transition)
+          // Submit own answers first
           submitAnswers(updated.bus_pressed_by);
+
+          // ALL clients attempt transition after 5 seconds (idempotent - first wins)
+          // Fetch latest round ID fresh from DB then attempt transition
+          setTimeout(async () => {
+            const { data: latestRound } = await supabase
+              .from('rounds').select('id').eq('room_id', roomId)
+              .order('round_number', { ascending: false }).limit(1).maybeSingle();
+            if (!latestRound) return;
+            console.log('[Realtime] Attempting transition to results', roomId, latestRound.id);
+            await supabase.from('rounds').update({ ended_at: new Date().toISOString() }).eq('id', latestRound.id);
+            await supabase.from('rooms').update({ status: 'results' }).eq('id', roomId);
+          }, 5000);
         }
 
         if (updated.status === 'results') {
@@ -210,7 +223,7 @@ export default function GamePage() {
         event: '*',
         schema: 'public',
         table: 'players',
-        filter: `room_id=eq.${room.id}`,
+        filter: `room_id=eq.${roomId}`,
       }, payload => {
         if (payload.eventType === 'UPDATE') {
           setPlayers(prev => prev.map(p => p.id === (payload.new as Player).id ? payload.new as Player : p));
@@ -219,7 +232,7 @@ export default function GamePage() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [room?.id]); // CRITICAL: Remove busPressed from deps to prevent subscription restart on press!
+  }, [room?.id]); // CRITICAL: room.id only - no other deps to prevent subscription restarts!
 
   // Answer change handler with pre-validation and auto-save
   const handleAnswerChange = useCallback((category: string, value: string) => {
