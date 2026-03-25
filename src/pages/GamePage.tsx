@@ -112,12 +112,20 @@ export default function GamePage() {
   const room = state.room;
   const categories = room?.settings?.categories || [];
 
-  // Initialize answers
+  // Initialize answers - only set missing keys, NEVER overwrite existing typed answers
   useEffect(() => {
+    const current = answersRef.current;
     const init: Record<string, string> = {};
-    categories.forEach(c => { init[c] = ''; });
-    dispatch({ type: 'SET_ANSWERS_DRAFT', payload: init });
-    answersRef.current = init;
+    let changed = false;
+    categories.forEach(c => {
+      // Keep existing answer if already typed, only add missing categories
+      init[c] = current[c] ?? '';
+      if (!(c in current)) changed = true;
+    });
+    if (changed || Object.keys(current).length === 0) {
+      dispatch({ type: 'SET_ANSWERS_DRAFT', payload: init });
+      answersRef.current = init;
+    }
   }, [categories.join(',')]);
 
   // Load room + round + players on mount
