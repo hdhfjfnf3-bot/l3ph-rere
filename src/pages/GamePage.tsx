@@ -106,6 +106,7 @@ export default function GamePage() {
   const answersRef = useRef<Record<string, string>>({});
   const autoSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTickRef = useRef<number>(-1);
+  const busPressedRef = useRef<string | null>(null); // Use ref to avoid Realtime subscription restart
 
   const sessionId = getSessionId();
   const currentPlayer = state.currentPlayer;
@@ -190,7 +191,8 @@ export default function GamePage() {
         const updated = payload.new as any;
         dispatch({ type: 'SET_ROOM', payload: updated });
 
-        if (updated.bus_pressed_by && !busPressed) {
+        if (updated.bus_pressed_by && !busPressedRef.current) {
+          busPressedRef.current = updated.bus_pressed_by;
           setBusPressed(updated.bus_pressed_by);
           setIsLocked(true);
           if (timerRef.current) clearInterval(timerRef.current);
@@ -217,7 +219,7 @@ export default function GamePage() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [room?.id, busPressed]);
+  }, [room?.id]); // CRITICAL: Remove busPressed from deps to prevent subscription restart on press!
 
   // Answer change handler with pre-validation and auto-save
   const handleAnswerChange = useCallback((category: string, value: string) => {
@@ -305,10 +307,11 @@ export default function GamePage() {
   }, [isLocked, submitAnswers]);
 
   const handleBusPress = async () => {
-    if (isLocked || busPressed || !currentPlayer || !room) return;
+    if (isLocked || busPressedRef.current || !currentPlayer || !room) return;
     vibrate([100, 50, 100]);
     if (state.soundEnabled) sounds.busHorn();
 
+    busPressedRef.current = currentPlayer.id;
     setIsLocked(true);
     setBusPressed(currentPlayer.id);
     if (timerRef.current) clearInterval(timerRef.current);
