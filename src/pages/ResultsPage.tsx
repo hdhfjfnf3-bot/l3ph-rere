@@ -27,7 +27,7 @@ export default function ResultsPage() {
   const isHost = room?.host_id === sessionId;
   const isLastRound = (room?.current_round || 0) >= (room?.settings?.rounds || 5);
 
-  // Load data
+  // Load data — wait 2s before loading answers to ensure all clients submitted
   useEffect(() => {
     if (!code) return;
     (async () => {
@@ -44,6 +44,8 @@ export default function ResultsPage() {
 
         if (rounds?.[0]) {
           setRound(rounds[0]);
+          // Wait 3 seconds to ensure all clients have submitted their answers
+          await new Promise(res => setTimeout(res, 3000));
           const { data: ans } = await supabase.from('answers').select('*').eq('round_id', rounds[0].id);
           if (ans) {
             setAnswers(ans);
