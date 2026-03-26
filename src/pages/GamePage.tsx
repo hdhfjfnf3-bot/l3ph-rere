@@ -68,6 +68,10 @@ function CategoryInput({
           maxLength={30}
           style={{ paddingLeft: value ? '36px' : '16px' }}
           dir="rtl"
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="none"
+          spellCheck={false}
         />
         {value && (
           <span style={{

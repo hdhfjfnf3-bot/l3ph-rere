@@ -21,30 +21,30 @@ async function validateWithGemini(
     return basicValidation(word, category, letter);
   }
 
-  const prompt = `أنت أشرس وأقسى حكم في تاريخ لعبة "أتوبيس كومبليت". 
-اللاعبون يغشون بإدخال كلمات "تبدو" عربية ولكنها وهمية أو نادرة جداً (مثل: حبيل، حبلا، شسي، فسيبس، فيشي).
+  const prompt = `أنت حكم عادل في لعبة "أتوبيس كومبليت". 
+اللاعبون أحياناً يدخلون كلمات صحيحة وموجودة ولكنها قد تكون غير شائعة جداً، وأحياناً يغشون بإدخال كلمات "تبدو" عربية ولكنها وهمية أو مجرد أحرف عشوائية (مثل: حبيل، حبلا، شسي، فسيبس).
 
 الحرف المطلوب: "${letter}"
 الفئة المطلوبة: "${category}"
 الكلمة المُدخلة: "${word}"
 
-مهمتك كشف الكلمات الوهمية (Hallucinations):
+مهمتك تقييم الكلمة كالتالي:
 1. هل الكلمة "${word}" هي حروف عشوائية، أو اسم وهمي، أو مجرد وزن لغوي ليس له وجود حقيقي كاسم متعارف عليه؟
-2. هل الكلمة حقيقية 100% ومشهورة جداً ويعرفها الشخص العادي؟ اشتبه في الكلمات الغريبة أو المؤلفة!
-3. هل تنتمي الكلمة حصراً وبشكل قاطع للفئة "${category}"؟
+2. هل الكلمة حقيقية ولها معنى في اللغة العربية أو هي اسم لشيء موجود فعلاً؟ (حتى لو كانت غير مشهورة جداً، المهم ألا تكون مؤلفة أو عشوائية).
+3. هل تنتمي الكلمة للفئة المطلوبة "${category}"؟
 
 أجب بمسودة JSON فقط بهذا التنسيق وبدون أي إضافة:
 {
   "is_fake_or_gibberish": boolean,
-  "is_real_and_famous": boolean,
+  "is_real_and_meaningful": boolean,
   "belongs_to_category": boolean,
   "status": "valid" | "invalid",
-  "reason": "سبب مختصر يشرح لماذا هي وهمية أو حقيقية"
+  "reason": "سبب مختصر يشرح التقييم"
 }
 
-قواعد صارمة جداً لتقييم status:
-- لتكون "valid": يجب أن تكون is_fake_or_gibberish=false، و is_real_and_famous=true، و belongs_to_category=true، وتبدأ بالحرف الصحيح. يجب أن تكون متأكداً 100% أن الكلمة مشهورة (مثال الصحيح: "حمار" حيوان، "حسام" ولد).
-- لتكون "invalid": إذا كانت الكلمة وهمية (fake) أو مجرد حروف مركبة أو لا أحد يستخدمها (مثل: حبيل، حبلا)، أو لا تنتمي للفئة، أو لا تبدأ بالحرف. ارفض بلا رحمة!`;
+قواعد التقييم لـ status:
+- لتكون "valid": يجب أن تكون is_fake_or_gibberish=false، و is_real_and_meaningful=true، و belongs_to_category=true. اقبل الكلمة إذا كانت صحيحة ولها معنى منطقي ضمن الفئة.
+- لتكون "invalid": إذا كانت الكلمة وهمية (fake) أو مجرد حروف مركبة، أو لا تنتمي للفئة نهائياً.`;
 
   try {
     const response = await fetch(
@@ -72,7 +72,7 @@ async function validateWithGemini(
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
       // Safety override: if the AI marked it as fake or not real, force invalid regardless of what it put in status
-      if (parsed.is_fake_or_gibberish === true || parsed.is_real_and_famous === false || parsed.belongs_to_category === false) {
+      if (parsed.is_fake_or_gibberish === true || parsed.is_real_and_meaningful === false || parsed.belongs_to_category === false) {
         return 'invalid';
       }
       return parsed.status as AnswerStatus;
@@ -156,12 +156,26 @@ export function preValidate(word: string, letter: string): { ok: boolean; reason
   const letterIsAlef = alefVariants.includes(letter);
   const wordStartsWithAlef = alefVariants.some(v => trimmed.startsWith(v));
 
+  // Detect and optionally ignore "ال" prefix if the required letter is not Alef
+  let checkWord = trimmed;
+  if (!letterIsAlef && trimmed.startsWith('ال') && trimmed.length > 3) {
+    checkWord = trimmed.slice(2);
+  }
+
+  // Handle letter variants (e.g. ي and ى)
+  const isYaa = letter === 'ي' || letter === 'ى';
+  const wordStartsWithYaa = checkWord.startsWith('ي') || checkWord.startsWith('ى');
+
   if (letterIsAlef) {
-    if (!wordStartsWithAlef) {
+    if (!wordStartsWithAlef && !checkWord.startsWith('ا') && !checkWord.startsWith('أ') && !checkWord.startsWith('إ') && !checkWord.startsWith('آ')) {
+      return { ok: false, reason: `الكلمة يجب أن تبدأ بحرف ${letter}` };
+    }
+  } else if (isYaa) {
+    if (!wordStartsWithYaa) {
       return { ok: false, reason: `الكلمة يجب أن تبدأ بحرف ${letter}` };
     }
   } else {
-    if (!trimmed.startsWith(letter)) {
+    if (!checkWord.startsWith(letter)) {
       return { ok: false, reason: `الكلمة يجب أن تبدأ بحرف ${letter}` };
     }
   }
