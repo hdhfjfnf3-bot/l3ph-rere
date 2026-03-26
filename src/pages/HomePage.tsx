@@ -211,11 +211,11 @@ export default function HomePage() {
             fontWeight: 700,
             color: 'var(--text-primary)'
           }}>
-            <span>صُنع بكل حب لبنتيييي 🥺</span>
-            <img 
-              src="https://em-content.zobj.net/source/facebook/355/red-heart_2764-fe0f.png" 
-              alt="❤️" 
-              style={{ width: 24, height: 24, animation: 'bus-pulse 2s infinite' }} 
+            <span>صنه بواسطه سوبرمان</span>
+            <img
+              /*  src="https://em-content.zobj.net/source/facebook/355/red-heart_2764-fe0f.png" */
+              alt="❤️"
+              style={{ width: 24, height: 24, animation: 'bus-pulse 2s infinite' }}
             />
           </div>
           <p className="text-muted text-xs">
